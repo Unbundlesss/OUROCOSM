@@ -1,0 +1,15 @@
+servers:
+  - display-name: "Sisyphus"
+    display-bio: "Just another personal Endlesss server"
+    display-geo: "Iceland"
+    scheme: "http"
+    host: "ndls.sisyphus.io"
+    api-port: 21000
+    db-port: 21100
+  - display-name: "Blackhole"
+    display-bio: "Anonymous Beat Makers"
+    display-geo: "Secret"
+    scheme: "http"
+    host: "blackhole.net"
+    api-port: 8000
+    db-port: 9900
