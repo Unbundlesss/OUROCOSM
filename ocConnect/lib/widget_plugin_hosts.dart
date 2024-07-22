@@ -7,8 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:win32_registry/win32_registry.dart';
 import 'package:path/path.dart' as path;
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:io' as io;
+import 'widget_macos_apppick.dart';
 
 // -----------------------------------------------------------------------------
 // event sent to trigger an app launch
@@ -39,12 +41,14 @@ class PluginHostList extends StatefulWidget {
   const PluginHostList({super.key});
 
   @override
-  _PluginHostListState createState() => _PluginHostListState();
+  PluginHostListState createState() => PluginHostListState();
 }
 
-class _PluginHostListState extends State<PluginHostList> {
+class PluginHostListState extends State<PluginHostList> {
   List<PluginHost> _pluginHosts = [];
   String? _builtInStudioHost;
+  final _appAdditionController = StreamController<ApplicationInfo>();
+  late StreamSubscription<ApplicationInfo> _appAdditionSub;
 
   // Fetch data from SharedPreferences on initialization
   @override
@@ -54,6 +58,18 @@ class _PluginHostListState extends State<PluginHostList> {
     if (Platform.isWindows) {
       _findStudioOnWindowsViaRegistry();
     }
+    if (Platform.isMacOS) {
+      _appAdditionSub =
+          _appAdditionController.stream.listen((ApplicationInfo data) {
+        _addPluginHostFromAppInfo(data);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _appAdditionSub.cancel();
+    super.dispose();
   }
 
   // get the Studio install path from the registry on Windows
@@ -97,7 +113,7 @@ class _PluginHostListState extends State<PluginHostList> {
 
   // Add a new PluginHost instance
   // on Windows, we use a file picker so the user can find an .exe
-  void _addPluginHost() async {
+  void _addPluginHostViaFilePicker() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['exe'],
@@ -112,6 +128,29 @@ class _PluginHostListState extends State<PluginHostList> {
       _savePluginHosts();
     } else {
       // User canceled the picker
+    }
+  }
+
+  void _addPluginHostFromAppInfo(ApplicationInfo appInfo) {
+    setState(() {
+      _pluginHosts.add(PluginHost(appInfo.displayName, appInfo.executablePath));
+    });
+    _savePluginHosts();
+  }
+
+  void _handleAddHostButton(BuildContext context) {
+    if (Platform.isWindows) {
+      _addPluginHostViaFilePicker();
+    }
+    if (Platform.isMacOS) {
+      final alreadyAddedAppSet = _pluginHosts.map((e) => e.path).toSet();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => MacOSApplicationPickerPage(
+                applicationsAlreadyAdded: alreadyAddedAppSet,
+                applicationInfoStream: _appAdditionController)),
+      );
     }
   }
 
@@ -163,24 +202,23 @@ class _PluginHostListState extends State<PluginHostList> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                style: ButtonStyle(
-                  foregroundColor:
-                      WidgetStateProperty.all(localColourScheme.surface),
-                  backgroundColor:
-                      WidgetStateProperty.all(localColourScheme.inverseSurface),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Host ...'),
-                onPressed: _addPluginHost,
-              )
-            ],
-          ),
-        ),
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  style: ButtonStyle(
+                    foregroundColor:
+                        WidgetStateProperty.all(localColourScheme.surface),
+                    backgroundColor: WidgetStateProperty.all(
+                        localColourScheme.inverseSurface),
+                  ),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Host ...'),
+                  onPressed: () => {_handleAddHostButton(context)},
+                )
+              ],
+            )),
       ],
     );
   }
