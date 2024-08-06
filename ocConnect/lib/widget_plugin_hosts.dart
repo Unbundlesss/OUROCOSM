@@ -3,13 +3,15 @@
 
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:win32_registry/win32_registry.dart';
 import 'package:path/path.dart' as path;
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform, Process;
 import 'dart:io' as io;
+import 'server_config.dart';
 import 'widget_macos_apppick.dart';
 
 // -----------------------------------------------------------------------------
@@ -38,7 +40,9 @@ class PluginHost {
 // the plugin list handles all apps we can launch, including Studio
 // (if we can find it automatically)
 class PluginHostList extends StatefulWidget {
-  const PluginHostList({super.key});
+  const PluginHostList({super.key, required this.serverConfig});
+
+  final OuroServerConfig serverConfig;
 
   @override
   PluginHostListState createState() => PluginHostListState();
@@ -113,7 +117,7 @@ class PluginHostListState extends State<PluginHostList> {
 
   // Add a new PluginHost instance
   // on Windows, we use a file picker so the user can find an .exe
-  void _addPluginHostViaFilePicker() async {
+  void _addPluginHostViaFilePickerOnWindows() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['exe'],
@@ -138,9 +142,11 @@ class PluginHostListState extends State<PluginHostList> {
     _savePluginHosts();
   }
 
+  // on Windows, just use a file picker. 
+  // on Mac, list out the Applications folder on its own page with more manual app choice via file-picker on that page
   void _handleAddHostButton(BuildContext context) {
     if (Platform.isWindows) {
-      _addPluginHostViaFilePicker();
+      _addPluginHostViaFilePickerOnWindows();
     }
     if (Platform.isMacOS) {
       final alreadyAddedAppSet = _pluginHosts.map((e) => e.path).toSet();
@@ -160,6 +166,56 @@ class PluginHostListState extends State<PluginHostList> {
       _pluginHosts.removeAt(index);
     });
     _savePluginHosts();
+  }
+
+  // create a bash command script that does what ocConnect basically does; this is to work around weird
+  // child-process-spawning issues where stuff like IDAM would stop working when DAWs / Endlesss was 
+  // launched via ocConnect. spent a long time trying to fix that, couldn't, so now these scripts can
+  // deal with it because running from terminal doesn't exhibit those issues
+  void _exportPluginHostToMacOSCommand(PluginHost hostData) async {
+    final FileSaveLocation? exportFile = await getSaveLocation(
+        suggestedName:
+            "${widget.serverConfig.displayName} launch ${hostData.name}.command");
+    if (exportFile != null) {
+      final ndlsLaunchBash = '''
+#!/usr/bin/env bash
+
+export ENDLESSS_ENV=local
+export ENDLESSS_DATA_URL=${widget.serverConfig.hostIPv4}:${widget.serverConfig.dbPort}
+export ENDLESSS_API_URL=${widget.serverConfig.hostIPv4}:${widget.serverConfig.apiPort}
+export ENDLESSS_WEB_URL=${widget.serverConfig.hostIPv4}:${widget.serverConfig.apiPort}
+export ENDLESSS_HTTPS=false
+
+${hostData.path}
+  ''';
+      final file = File(exportFile.path);
+      await file.writeAsString(ndlsLaunchBash);
+      await Process.run('chmod', ['+x', exportFile.path]);
+    }
+  }
+
+  // dynamic per-platform per-host extra options added on the rhs of each line item
+  Widget _getHostTrailingOptions(int index) {
+    if (Platform.isMacOS) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _deletePluginHost(index),
+          ),
+          IconButton(
+            icon: const Icon(Icons.download_for_offline),
+            onPressed: () => _exportPluginHostToMacOSCommand(_pluginHosts[index]),
+          ),
+        ],
+      );
+    } else {
+      return IconButton(
+        icon: const Icon(Icons.delete),
+        onPressed: () => _deletePluginHost(index),
+      );
+    }
   }
 
   @override
@@ -184,20 +240,17 @@ class PluginHostListState extends State<PluginHostList> {
             itemCount: _pluginHosts.length,
             itemBuilder: (context, index) {
               final pluginHost = _pluginHosts[index];
+              final pluginTrailing = _getHostTrailingOptions(index);
               return ListTile(
-                leading: IconButton(
-                  icon: const Icon(Icons.play_circle_fill),
-                  onPressed: () =>
-                      {HostLaunchRequest(pluginHost.path).dispatch(context)},
-                ),
-                title: Text(pluginHost.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(pluginHost.path),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _deletePluginHost(index),
-                ),
-              );
+                  leading: IconButton(
+                    icon: const Icon(Icons.play_circle_fill),
+                    onPressed: () =>
+                        {HostLaunchRequest(pluginHost.path).dispatch(context)},
+                  ),
+                  title: Text(pluginHost.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(pluginHost.path),
+                  trailing: pluginTrailing);
             },
           ),
         ),

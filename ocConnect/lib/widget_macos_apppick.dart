@@ -1,7 +1,9 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io';
 
 // -----------------------------------------------------------------------------
 // represents a discovered app on MacOS, a display name and full path to the
@@ -10,10 +12,11 @@ class ApplicationInfo {
   late final String displayName;
   late final String executablePath;
 
-  ApplicationInfo(Map<String, String> data) {
+  ApplicationInfo.fromKV(Map<String, String> data) {
     displayName = data["displayName"] as String;
     executablePath = data["executablePath"] as String;
   }
+  ApplicationInfo(this.displayName, this.executablePath);
 }
 
 // -----------------------------------------------------------------------------
@@ -51,7 +54,7 @@ class PlatformSpecific {
 
     List<ApplicationInfo> appInfoResult = [];
     for (var i = 0; i < validData.length; i++) {
-      appInfoResult.add(ApplicationInfo(validData[i]));
+      appInfoResult.add(ApplicationInfo.fromKV(validData[i]));
     }
     return appInfoResult;
   }
@@ -91,10 +94,52 @@ class MacOSApplicationPickerPageState
     });
   }
 
+  Future<File?> getFirstFileInDirectory(String directoryPath) async {
+    try {
+      final dir = Directory(directoryPath);
+      if (!await dir.exists()) {
+        return null;
+      }
+
+      final list = await dir.list().toList();
+      for (final entity in list) {
+        if (entity is File) {
+          return entity;
+        }
+      }
+      return null; // no files found
+    } catch (e) {
+      return null;
+    }
+  }  
+
   void _handleSelection(BuildContext context, ApplicationInfo appInfo) {
     AppSelectionRequest(appInfo).dispatch(context);
     widget.applicationInfoStream.sink.add(appInfo);
     Navigator.pop(context);
+  }
+  void _handleCustomPicker(BuildContext context) async {
+    final XFile? file = await openFile();
+
+    if (file != null) {
+
+      // go hunt for executables
+      var executableSearch = path.join(file.path, 'Contents', 'MacOS');
+      final File? assumedExecutable = await getFirstFileInDirectory(executableSearch);
+
+      var appName = "Unknown";
+      var appPath = "No Executable Was Found";
+      if ( assumedExecutable != null ) {
+        appName = file.name;
+        appPath = assumedExecutable.path;
+      }
+      if (!context.mounted) return;
+
+      ApplicationInfo appInfo = ApplicationInfo( appName.replaceAll(".app", ""), appPath );
+      AppSelectionRequest(appInfo).dispatch(context);
+      widget.applicationInfoStream.sink.add(appInfo);
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -102,6 +147,14 @@ class MacOSApplicationPickerPageState
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: <Widget>[
+            IconButton(
+              icon: const Icon(
+                Icons.folder_open,
+              ),
+              onPressed: () => {_handleCustomPicker(context)},
+            )
+          ],        
         title: const Text("MacOS Applications",
             style: TextStyle(
                 fontFamily: 'D-DIN',

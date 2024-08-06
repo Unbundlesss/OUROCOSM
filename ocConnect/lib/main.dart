@@ -6,6 +6,7 @@ import 'dart:math';
 
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:collection';
 import 'server_config.dart';
 import 'widget_server_actions.dart';
@@ -16,6 +17,8 @@ import 'ndls_icons.dart' if (dart.library.io) 'ndls_icons.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+
   runApp(const OcConnect());
 
   // configure default window display via bitsdojo
@@ -25,7 +28,7 @@ Future<void> main() async {
     appWindow.maxSize = const Size(800, 1200);
     appWindow.size = initialSize;
     appWindow.alignment = Alignment.center;
-    appWindow.title = "OUROCOSM Connect";
+    appWindow.title = "OUROCOSM Connect ${packageInfo.version}";
     appWindow.show();
   });
 }
@@ -37,10 +40,10 @@ class _OcConnectState extends State<OcConnect> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        title: 'OUROCOSM Connect',
+        title: "OUROCOSM Connect",
         theme: ThemeData(
             fontFamily: "FiraCode",
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.tealAccent),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreenAccent),
             useMaterial3: true,
             scrollbarTheme: ScrollbarThemeData(
               thumbVisibility: WidgetStateProperty.all<bool>(true),

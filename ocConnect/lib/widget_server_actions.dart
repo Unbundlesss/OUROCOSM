@@ -122,7 +122,7 @@ class _ServerActionsPage extends State<ServerActionsPage> {
           children: [
             Expanded(
                 child: NotificationListener<HostLaunchRequest>(
-                    child: const PluginHostList(),
+                    child: PluginHostList(serverConfig: widget.config),
                     onNotification: (n) {
                       Navigator.push(
                         context,
