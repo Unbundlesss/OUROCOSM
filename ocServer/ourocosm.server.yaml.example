@@ -1,0 +1,17 @@
+couchDB:
+  scheme: "http"
+  internal-host: "192.168.8.0"
+  internal-port: "5984"
+  external-host: "ndls.jammers.eu"
+  external-port: "13000"
+  user: "controller"
+  pwd: "password"
+  salt: "195102751025"
+
+cosm:
+  scheme: "http"
+  internal-host: "192.168.8.0"
+  internal-port: "27000"
+  external-host: "ndls.jammers.eu"
+  external-port: "13001"
+  fourcc: "XxXx"
