@@ -17,11 +17,11 @@
 // part of the data-scraping for OUROVEON LORE, so that should keep us in IDs for a while:
 // https://github.com/Unbundlesss/OUROVEON/blob/main/bin/shared/endlesss.publics.json
 //
-// The ones embedded here were chosen from that list from jams with a very minimal amount of use, so they should be less likely
-// to collide with any from the real service or the public jam backup (in the case we ever tried to connect LORE to a COSM instance)
-//
 // In COSM, we can therefore now refer to jams by a simpler incremental title, eg. "Jam_001" and the code below will
 // be responsible for translating that into Endlesssian space for us. See the associated .json for details.
+//
+// The band IDs embedded here are taken from the above LORE dataset. As that guarantees overlap with previous Endlesss jams, the export tools
+// built into ocServer define a new band##### export signature to differentiate them (see op.export.go)
 //
 
 package util
