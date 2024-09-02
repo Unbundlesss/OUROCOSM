@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,26 +24,19 @@ import (
 	"go.uber.org/zap"
 )
 
-var cmdJamToExport = ""
-var cmdServerNamePrefix = ""
-var cmdStemS3Server = ""
+var (
+	cmdOutputDir          = "."
+	cmdJamToExport        = ""
+	cmdServerNamePrefix   = ""
+	cmdStemS3Server       = ""
+	cmdIgnoreMissingStems = false
+)
 
-var exportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "Export a jam to LORE jam archival format",
-	Long:  `Export a jam to LORE jam archival format`,
-	Run: func(cmd *cobra.Command, args []string) {
+func deduceOutputParametersForJam() (string, string, string) {
 
-		if len(cmdJamToExport) == 0 {
-			SysLog.Fatal("Jam to export cannot be null")
-		}
-
-		// when yanking stems from our server, we might be pointing at localhost or similar which
-		// (as it has to be over https) would kick up cert issues, so skip verification by default
-		httpTransport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		httpClient := &http.Client{Transport: httpTransport}
+	// if we're exporting a public/private jam, it begins with the COSMID prefix "jam_"
+	// otherwise, we're (presumably) asking for a personal user's own jam, handled after this block
+	if strings.HasPrefix(cmdJamToExport, "jam_") {
 
 		// lookup couch ID for access
 		idBank := SysBankIDs.Bank()
@@ -73,6 +67,43 @@ var exportCmd = &cobra.Command{
 			zap.String("LoreExID", customLOREExportID),
 		)
 
+		return lutID.CouchID, customLOREExportID, ""
+	} else {
+
+		// personal jams need the server prefix too, to differentiate them from the OG ones
+		customLOREPersonalID := fmt.Sprintf("%s_%s",
+			strings.ToLower(viper.GetString(cConfigCosmFourCC)),
+			strings.ToLower(cmdJamToExport),
+		)
+
+		SysLog.Info("Exporting Personal Jam",
+			zap.String("CouchID", cmdJamToExport),
+			zap.String("LoreExID", customLOREPersonalID),
+		)
+
+		return cmdJamToExport, customLOREPersonalID, cmdJamToExport
+	}
+}
+
+var exportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export a jam to LORE jam archival format",
+	Long:  `Export a jam to LORE jam archival format`,
+	Run: func(cmd *cobra.Command, args []string) {
+
+		if len(cmdJamToExport) == 0 {
+			SysLog.Fatal("Jam to export cannot be null")
+		}
+
+		// when yanking stems from our server, we might be pointing at localhost or similar which
+		// (as it has to be over https) would kick up cert issues, so skip verification by default
+		httpTransport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		httpClient := &http.Client{Transport: httpTransport}
+
+		exportCouchID, exportLOREID, jamProfileDisplayNameUnsanitised := deduceOutputParametersForJam()
+
 		// ring ring mr couch
 		couchClient, err := connectToCouchDB()
 		if err != nil {
@@ -81,20 +112,34 @@ var exportCmd = &cobra.Command{
 		defer couchClient.Close()
 
 		// connect to the jam's couch database
-		jamDb := couchClient.DB(fmt.Sprintf("user_appdata$%s", lutID.CouchID))
+		jamDb := couchClient.DB(fmt.Sprintf("user_appdata$%s", exportCouchID))
 
-		// pull the current Profile doc
-		var currentJamProfile JamDatabaseProfileUpdate
-		err = jamDb.Get(context.TODO(), "Profile").ScanDoc(&currentJamProfile)
-		if err != nil {
-			SysLog.Fatal("Unable to fetch jam Profile document", zap.String("COSMID", cmdJamToExport), zap.String("CouchID", lutID.CouchID), zap.Error(err))
+		// no provided display name from deduceOutputParametersForJam(), get it from the jam's Profile doc
+		if len(jamProfileDisplayNameUnsanitised) == 0 {
+			// pull the current Profile doc
+			var currentJamProfile JamDatabaseProfileUpdate
+			err = jamDb.Get(context.TODO(), "Profile").ScanDoc(&currentJamProfile)
+			if err != nil {
+				SysLog.Fatal("Unable to fetch jam Profile document", zap.String("COSMID", cmdJamToExport), zap.String("CouchID", exportCouchID), zap.Error(err))
+			}
+			jamProfileDisplayNameUnsanitised = currentJamProfile.DisplayName
 		}
+		jamProfileDisplayName := sanitiseNameForPath(jamProfileDisplayNameUnsanitised, '_', false)
 
 		// common yaml/tar base filename
-		orxBasePath := fmt.Sprintf("orx.[%s]_%s.%s", strings.ToLower(cmdServerNamePrefix), sanitiseNameForPath(currentJamProfile.DisplayName, '_', false), customLOREExportID)
+		orxBasePath := fmt.Sprintf("orx.[%s]_%s.%s", strings.ToLower(cmdServerNamePrefix), jamProfileDisplayName, exportLOREID)
+
+		SysLog.Info("Jam Profile",
+			zap.String("Name", jamProfileDisplayName),
+			zap.String("Output", orxBasePath),
+		)
 
 		// we will write the yaml line by line, open it upfront
-		yamlFile, err := os.Create(fmt.Sprintf("%s.yaml", orxBasePath))
+		yamlFileRoot := path.Join(cmdOutputDir, "_archives")
+		os.MkdirAll(yamlFileRoot, os.ModePerm)
+
+		yamlFilePath := path.Join(yamlFileRoot, fmt.Sprintf("%s.yaml", orxBasePath))
+		yamlFile, err := os.Create(yamlFilePath)
 		if err != nil {
 			SysLog.Fatal("Unable to create output YAML", zap.Error(err))
 		}
@@ -104,8 +149,8 @@ var exportCmd = &cobra.Command{
 		yamlFile.WriteString(fmt.Sprintf("# export from OUROCOSM private server '%s'\n", cmdServerNamePrefix))
 		yamlFile.WriteString(fmt.Sprintf("export_time_unix: %d\n", time.Now().Unix()))
 		yamlFile.WriteString("export_ouroveon_version: \"1.1.4\"\n") // compliant with 1.1.4, so we pretend
-		yamlFile.WriteString(fmt.Sprintf("jam_name: \"[%s] %s\"\n", cmdServerNamePrefix, currentJamProfile.DisplayName))
-		yamlFile.WriteString(fmt.Sprintf("jam_couch_id: \"%s\"\n", customLOREExportID))
+		yamlFile.WriteString(fmt.Sprintf("jam_name: \"[%s] %s\"\n", cmdServerNamePrefix, jamProfileDisplayNameUnsanitised))
+		yamlFile.WriteString(fmt.Sprintf("jam_couch_id: \"%s\"\n", exportLOREID))
 
 		{
 			// walk the riffs
@@ -230,23 +275,37 @@ var exportCmd = &cobra.Command{
 				if len(cmdStemS3Server) > 0 {
 
 					// create a LORE-cache compatible output path
-					stemPath := filepath.Join("_stems", customLOREExportID, resultData.ID[0:1])
+					stemPath := filepath.Join(cmdOutputDir, "_stems", exportLOREID, resultData.ID[0:1])
 					os.MkdirAll(stemPath, os.ModePerm)
 
 					// create from/to locations
 					stemDownloadUrl := fmt.Sprintf("https://%s/%s", cmdStemS3Server, resultData.CdnAttachments.OggAudio.Key)
 					stemDownloadFile := filepath.Join(stemPath, resultData.ID)
 
-					stemFilePaths = append(stemFilePaths, stemDownloadFile)
+					stemFileExist := false
 
 					// download if we don't already have it
 					if _, err := os.Stat(stemDownloadFile); errors.Is(err, os.ErrNotExist) {
 						err = downloadStem(httpClient, resultData.CdnAttachments.OggAudio.Length, stemDownloadFile, stemDownloadUrl)
 						if err != nil {
-							SysLog.Fatal("Stem download failed", zap.Error(err))
+							if !cmdIgnoreMissingStems {
+								SysLog.Fatal("Stem download failed", zap.Error(err), zap.String("url", stemDownloadUrl))
+							} else {
+								SysLog.Warn("Stem download failed", zap.Error(err), zap.String("url", stemDownloadUrl))
+							}
 							os.Remove(stemDownloadFile)
+						} else {
+							// file downloaded ok
+							stemDownloads++
+							stemFileExist = true
 						}
-						stemDownloads++
+					} else {
+						// file already in cache
+						stemFileExist = true
+					}
+
+					if stemFileExist {
+						stemFilePaths = append(stemFilePaths, stemDownloadFile)
 					}
 				}
 			}
@@ -259,7 +318,7 @@ var exportCmd = &cobra.Command{
 
 				// to pacify LORE, we also write out all the required directory structure - do this first to get the structure built upfront
 				directoryBasePaths := []string{}
-				err := filepath.Walk(filepath.Join("_stems", customLOREExportID), func(path string, info os.FileInfo, err error) error {
+				err := filepath.Walk(filepath.Join(cmdOutputDir, "_stems", exportLOREID), func(path string, info os.FileInfo, err error) error {
 					if err != nil {
 						return err
 					}
@@ -275,10 +334,12 @@ var exportCmd = &cobra.Command{
 				// bolt on all the stems to write to the TAR
 				finalTARLayout := append(directoryBasePaths, stemFilePaths[:]...)
 
+				SysLog.Info(fmt.Sprintf("tar creation with %d entries", len(finalTARLayout)))
+
 				// remove (if required) and recreate the archive
-				tarOutputFile := fmt.Sprintf("%s.tar", orxBasePath)
+				tarOutputFile := path.Join(cmdOutputDir, "_archives", fmt.Sprintf("%s.tar", orxBasePath))
 				os.Remove(tarOutputFile)
-				err = createTarArchive(finalTARLayout, "_stems/", tarOutputFile)
+				err = createTarArchive(finalTARLayout, path.Join(cmdOutputDir, "_stems"), tarOutputFile)
 				if err != nil {
 					SysLog.Fatal("TAR archive creation failed", zap.Error(err))
 					os.Remove(tarOutputFile)
@@ -292,9 +353,14 @@ var exportCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(exportCmd)
 
+	exportCmd.Flags().StringVarP(&cmdOutputDir, "out", "o", "", "output directory to write to / use as cache root")
+
 	exportCmd.Flags().StringVarP(&cmdJamToExport, "jam", "j", "", "(required) COSMID jam ID to export")
 	exportCmd.MarkFlagRequired("jam")
 	exportCmd.Flags().StringVarP(&cmdServerNamePrefix, "prefix", "p", "", "(required) Server name prefix applied to each jam export")
 	exportCmd.MarkFlagRequired("prefix")
 	exportCmd.Flags().StringVarP(&cmdStemS3Server, "stem", "s", "", "if given, talk to this S3 server to fetch the stems and bake them into a .tar")
+
+	exportCmd.Flags().BoolVarP(&cmdIgnoreMissingStems, "ignore-missing", "i", false, "ignore any 404 responses when downloading stem data")
+
 }

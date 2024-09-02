@@ -159,9 +159,11 @@ func createTarArchive(files []string, baseRelativePath, outputFile string) error
 	tw := tar.NewWriter(buf)
 	defer tw.Close()
 
+	pathFixedBaseRelativePath := strings.Replace(baseRelativePath, "\\", "/", -1)
+
 	// Iterate over files and add them to the tar archive
 	for _, file := range files {
-		err := addToArchive(tw, baseRelativePath, file)
+		err := addToArchive(tw, pathFixedBaseRelativePath, file)
 		if err != nil {
 			return err
 		}
@@ -194,6 +196,9 @@ func addToArchive(tw *tar.Writer, baseRelativePath, filename string) error {
 	// not be preserved
 	// https://golang.org/src/archive/tar/common.go?#L626
 	header.Name = strings.Replace(strings.Replace(filename, "\\", "/", -1), baseRelativePath, "", -1)
+	if len(header.Name) > 0 && header.Name[0] == '/' {
+		header.Name = header.Name[1:]
+	}
 
 	// Write file header to the tar archive
 	err = tw.WriteHeader(header)
