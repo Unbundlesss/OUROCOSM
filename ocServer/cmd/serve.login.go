@@ -6,6 +6,7 @@
 package cmd
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -67,7 +68,7 @@ func HandlerAuthLogin(httpResponse http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userExtras.Login != authLoginRequest.Password {
+	if subtle.ConstantTimeCompare([]byte(userExtras.Login), []byte(authLoginRequest.Password)) != 1 {
 		SysLog.Error("Invalid password", zap.String("User", authLoginRequest.Username))
 		http.Error(httpResponse, "Invalid password", http.StatusUnauthorized)
 		return
