@@ -7,7 +7,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -60,11 +59,11 @@ type SamplerResponseData struct {
 // {"ok":true,"data":{"soundPacks":[]}}
 func HandlerSoundPacksGet(httpResponse http.ResponseWriter, r *http.Request) {
 
-	//	authUsername, _, err := decodeAccountAuthBearer(r)
-	//	if err != nil {
-	//		http.Error(httpResponse, err.Error(), http.StatusForbidden)
-	//		return
-	//	}
+	//authUsername, _, err := decodeAccountAuthBearer(r)
+	//if err != nil {
+	//	http.Error(httpResponse, err.Error(), http.StatusForbidden)
+	//	return
+	//}
 
 	soundPacks := make([]SamplerSoundPack, 0, 10)
 	samplerData := SamplerData{
@@ -75,8 +74,8 @@ func HandlerSoundPacksGet(httpResponse http.ResponseWriter, r *http.Request) {
 		Data: samplerData,
 	}
 
-	//	jsonData, _ := json.Marshal(samplerResponse)
-	//	fmt.Printf("SP GET: %s\n%s", authUsername, jsonData)
+	//jsonData, _ := json.Marshal(samplerResponse)
+	//fmt.Printf("SP GET: %s\n%s", authUsername, jsonData)
 
 	httpResponse.Header().Set(HeaderNameContentType, ContentTypeApplicationJson)
 	httpResponse.WriteHeader(http.StatusOK)
@@ -108,6 +107,9 @@ func HandlerSoundPacksPost(httpResponse http.ResponseWriter, r *http.Request) {
 	}
 
 	SysLog.Info("SoundPack root request", zap.String("User", authUsername), zap.String("Pack", soundPackRoot.Name))
+	//for k, v := range r.Header {
+	//	fmt.Printf("  [%s] = %s\n", k, v)
+	//}
 
 	httpResponse.WriteHeader(http.StatusOK)
 }
@@ -144,11 +146,10 @@ func HandlerSoundPacksPresetsPost(httpResponse http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	debugOut, _ := json.MarshalIndent(soundPackUpdate, "", "    ")
-
 	SysLog.Info("SoundPack update", zap.String("User", authUsername))
 
-	fmt.Printf("%s\n", string(debugOut))
+	//debugOut, _ := json.MarshalIndent(soundPackUpdate, "", "    ")
+	//fmt.Printf("%s\n", string(debugOut))
 
 	httpResponse.WriteHeader(http.StatusOK)
 }
