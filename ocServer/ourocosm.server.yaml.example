@@ -15,3 +15,6 @@ cosm:
   external-host: "ndls.jammers.eu"
   external-port: "13001"
   fourcc: "XxXx"
+  api-prefix: "foobar"
+  api-auth:
+    apiuser: "passwd"

@@ -6,6 +6,7 @@
 package cmd
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,11 +32,41 @@ const cConfigCosmInternalPort string = "cosm.internal-port"
 const cConfigCosmExternalHost string = "cosm.external-host"
 const cConfigCosmExternalPort string = "cosm.external-port"
 const cConfigCosmFourCC string = "cosm.fourcc"
+const cConfigCosmAPIPrefix string = "cosm.api-prefix"
+const cConfigCosmAPIAuth string = "cosm.api-auth"
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 func HandlerDefault(httpResponse http.ResponseWriter, r *http.Request) {
 	SysLog.Warn("Unhandled request", zap.String("Method", r.Method), zap.String("URI", r.RequestURI), zap.String("RemoteAddr", r.RemoteAddr))
 	httpResponse.WriteHeader(http.StatusNotFound)
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+var SecuredApiCredentials map[string]string
+
+// simple security gateway around chosen API endpoints, uses user/pass as given by config api-auth table
+// intention being that we might have trusted tools working with some of those endpoints, keep them tucked away from scraping/casual abuse
+func SecuredApiAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		user, pass, ok := r.BasicAuth()
+
+		loginAccepted := false
+		if ok {
+			expectedPass, ok := SecuredApiCredentials[user]
+			if ok {
+				loginAccepted = subtle.ConstantTimeCompare([]byte(pass), []byte(expectedPass)) == 1
+			}
+		}
+
+		if !loginAccepted {
+			w.Header().Set("WWW-Authenticate", `Basic realm="ourocosm-api"`)
+			http.Error(w, "Unavailable", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -47,6 +78,13 @@ func runCosmServer() {
 	defer close(bgJamWorker)
 
 	router := mux.NewRouter()
+
+	// some api functions are tucked away behind a server-side prefix with basic authentication
+	apiPrefix := viper.GetString(cConfigCosmAPIPrefix)
+	SecuredApiCredentials = viper.GetStringMapString(cConfigCosmAPIAuth)
+	for k := range SecuredApiCredentials {
+		SysLog.Info("API Access granted", zap.String("Username", k)) // list out API users just to keep an eye on them
+	}
 
 	// authentication
 	router.HandleFunc("/auth/login", HandlerAuthLogin).Methods("POST")
@@ -81,6 +119,11 @@ func runCosmServer() {
 
 	// custom bits
 	router.HandleFunc("/cosm/v1/status", HandlerCosmStatus).Methods("GET") // return a basic heartbeat response indicating server is alive, server time, etc
+
+	// custom bits that we want locked behind some kind of path obfuscation + user/pass visibility
+	securedApi := router.PathPrefix(fmt.Sprintf("/cosm/v1/%s", apiPrefix)).Subrouter()
+	securedApi.HandleFunc("/manifest", HandlerCosmManifest).Methods("GET") // return base details about COSMIDs in use
+	securedApi.Use(SecuredApiAuth)
 
 	// static data handling for avatars or generic images
 	rootAvatarPath := path.Join(cmdServeRootPath, "avatars")
@@ -142,6 +185,7 @@ var serveCmd = &cobra.Command{
 			cConfigCosmInternalHost,
 			cConfigCosmInternalPort,
 			cConfigCosmFourCC,
+			cConfigCosmAPIPrefix,
 		}
 		for _, v := range configChecks {
 			if !viper.IsSet(v) || len(viper.GetString(v)) == 0 {

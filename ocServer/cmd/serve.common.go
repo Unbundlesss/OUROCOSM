@@ -90,8 +90,9 @@ type AppClientConfigBandsUpdate struct {
 // -----------------------------------------------------------------------------------------------------------------------------------
 // lookups built from the jam manifest file, mapping ids to chosen public names
 type JamManifest struct {
-	couchToName  map[string]string
-	cosmidToName map[string]string
+	couchToName    map[string]string
+	cosmidToName   map[string]string
+	cosmidIsPublic map[string]bool
 }
 
 func (jman JamManifest) NameFromCouch(couchID string) (string, bool) {
@@ -101,6 +102,13 @@ func (jman JamManifest) NameFromCouch(couchID string) (string, bool) {
 func (jman JamManifest) NameFromCOSMID(cosmid string) (string, bool) {
 	result, ok := jman.cosmidToName[cosmid]
 	return result, ok
+}
+func (jman JamManifest) COSMIDJamIsPublic(cosmid string) (bool, bool) {
+	result, ok := jman.cosmidIsPublic[cosmid]
+	return result, ok
+}
+func (jman JamManifest) NumberOfCOSMIDs() int {
+	return len(jman.cosmidToName)
 }
 
 // our current stack of known jams
@@ -241,6 +249,7 @@ func performJamPreflight(couchClient *kivik.Client, jamDecl CosmServerJamDecl, i
 
 	jamManifest.couchToName[lutID.CouchID] = jamDecl.Name
 	jamManifest.cosmidToName[jamDecl.COSMID] = jamDecl.Name
+	jamManifest.cosmidIsPublic[jamDecl.COSMID] = isPublic
 
 	return &entry
 }
@@ -252,6 +261,7 @@ func constructJamManifestFromData(jamData CosmServerJamData) *JamManifest {
 	manifestResult := JamManifest{}
 	manifestResult.couchToName = make(map[string]string)
 	manifestResult.cosmidToName = make(map[string]string)
+	manifestResult.cosmidIsPublic = make(map[string]bool)
 
 	publicJamsResponse = new(JamCuratedResponse)
 	publicJamsResponse.Okay = true
@@ -266,12 +276,14 @@ func constructJamManifestFromData(jamData CosmServerJamData) *JamManifest {
 	// keep a list of public jam IDs to write into ACC later
 	var joinablePublicBandIds []string
 
+	SysLog.Info("Preflight - Public")
 	for _, v := range jamData.Public {
 		entry := performJamPreflight(couchClient, v, true, &manifestResult)
 		publicJamsResponse.Data = append(publicJamsResponse.Data, *entry)
 
 		joinablePublicBandIds = append(joinablePublicBandIds, entry.JamCouchID)
 	}
+	SysLog.Info("Preflight - Private")
 	for _, v := range jamData.Private {
 		performJamPreflight(couchClient, v, false, &manifestResult)
 	}
