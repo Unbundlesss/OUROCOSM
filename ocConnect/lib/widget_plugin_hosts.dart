@@ -79,19 +79,23 @@ class PluginHostListState extends State<PluginHostList> {
   // get the Studio install path from the registry on Windows
   void _findStudioOnWindowsViaRegistry() {
     const keyPath = r'SOFTWARE\Endlesss Ltd\Endlesss';
-    final key = Registry.openPath(RegistryHive.localMachine, path: keyPath);
+    try {
+      final key = Registry.openPath(RegistryHive.localMachine, path: keyPath);
 
-    var studioInstallPath = key.getValueAsString('InstallationPath');
-    if (studioInstallPath != null) {
-      debugPrint("Found Studio install reg key: $studioInstallPath");
+      var studioInstallPath = key.getValueAsString('InstallationPath');
+      if (studioInstallPath != null) {
+        debugPrint("Found Studio install reg key: $studioInstallPath");
 
-      studioInstallPath = path.join(studioInstallPath, "Endlesss.exe");
-      if (io.File(studioInstallPath).existsSync()) {
-        debugPrint("Studio confirmed to exist");
-        _builtInStudioHost = studioInstallPath;
+        studioInstallPath = path.join(studioInstallPath, "Endlesss.exe");
+        if (io.File(studioInstallPath).existsSync()) {
+          debugPrint("Studio confirmed to exist");
+          _builtInStudioHost = studioInstallPath;
+        }
       }
+      key.close();
+    } catch (e) {
+      debugPrint('Endlesss Studio not installed');
     }
-    key.close();
   }
 
   // Load PluginHosts from SharedPreferences
@@ -142,7 +146,7 @@ class PluginHostListState extends State<PluginHostList> {
     _savePluginHosts();
   }
 
-  // on Windows, just use a file picker. 
+  // on Windows, just use a file picker.
   // on Mac, list out the Applications folder on its own page with more manual app choice via file-picker on that page
   void _handleAddHostButton(BuildContext context) {
     if (Platform.isWindows) {
@@ -169,7 +173,7 @@ class PluginHostListState extends State<PluginHostList> {
   }
 
   // create a bash command script that does what ocConnect basically does; this is to work around weird
-  // child-process-spawning issues where stuff like IDAM would stop working when DAWs / Endlesss was 
+  // child-process-spawning issues where stuff like IDAM would stop working when DAWs / Endlesss was
   // launched via ocConnect. spent a long time trying to fix that, couldn't, so now these scripts can
   // deal with it because running from terminal doesn't exhibit those issues
   void _exportPluginHostToMacOSCommand(PluginHost hostData) async {
@@ -206,7 +210,8 @@ ${hostData.path}
           ),
           IconButton(
             icon: const Icon(Icons.download_for_offline),
-            onPressed: () => _exportPluginHostToMacOSCommand(_pluginHosts[index]),
+            onPressed: () =>
+                _exportPluginHostToMacOSCommand(_pluginHosts[index]),
           ),
         ],
       );
