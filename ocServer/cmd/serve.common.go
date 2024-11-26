@@ -110,6 +110,13 @@ func (jman JamManifest) COSMIDJamIsPublic(cosmid string) (bool, bool) {
 func (jman JamManifest) NumberOfCOSMIDs() int {
 	return len(jman.cosmidToName)
 }
+func (jman JamManifest) GetCOSMIDS() []string {
+	keys := make([]string, 0, len(jman.cosmidToName))
+	for k := range jman.cosmidToName {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
 // our current stack of known jams
 var CurrentJamManifest *JamManifest

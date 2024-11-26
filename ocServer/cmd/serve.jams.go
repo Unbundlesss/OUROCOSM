@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	kivik "github.com/go-kivik/kivik/v4"
@@ -46,8 +46,18 @@ type JamCuratedResponse struct {
 	Data []JamCuratedData `json:"data"`
 }
 
-var publicJamsResponse *JamCuratedResponse  // global instance of the public jams data, updated in a goroutine
-var publicJamsLastChangeTimestamp int64 = 0 // atomically updated timestamp of the newest public riff; returned in server heartbeat
+type publicJamsLatestData struct {
+	LastChangeTimestamp int64 // timestamp of the newest public riff; returned in server heartbeat
+	LastChangeUser      string
+	LastChangeJam       string
+}
+type PublicJamsLatest struct {
+	publicJamsLatestData
+	mu sync.Mutex
+}
+
+var publicJamsResponse *JamCuratedResponse // global instance of the public jams data, updated in a goroutine
+var publicJamsLatest PublicJamsLatest
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 // fetch the most recent single riff from the given jam
@@ -88,7 +98,8 @@ func collectPublicJamStates(verboseOutput bool) {
 	defer couchClient.Close()
 
 	// fetch our current most-recent-timestamp for public riffs
-	mostRecentTimestamp := publicJamsLastChangeTimestamp
+	latestData := publicJamsLatestData{}
+	latestData = publicJamsLatest.publicJamsLatestData
 
 	for i := range publicJamsResponse.Data {
 
@@ -105,8 +116,10 @@ func collectPublicJamStates(verboseOutput bool) {
 			curatedRiff.Riff = *headRiff
 
 			// keep track of the most recent riff committed to a public jam
-			if headRiff.Created > mostRecentTimestamp {
-				mostRecentTimestamp = headRiff.Created
+			if headRiff.Created > latestData.LastChangeTimestamp {
+				latestData.LastChangeTimestamp = headRiff.Created
+				latestData.LastChangeUser = headRiff.UserName
+				latestData.LastChangeJam = curatedRiff.JamName
 			}
 		}
 
@@ -116,7 +129,12 @@ func collectPublicJamStates(verboseOutput bool) {
 	}
 
 	// swap out the latest timestamp we found
-	atomic.StoreInt64(&publicJamsLastChangeTimestamp, mostRecentTimestamp)
+	{
+		publicJamsLatest.mu.Lock()
+		defer publicJamsLatest.mu.Unlock()
+
+		publicJamsLatest.publicJamsLatestData = latestData
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------
