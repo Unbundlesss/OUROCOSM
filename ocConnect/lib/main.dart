@@ -43,7 +43,7 @@ class _OcConnectState extends State<OcConnect> {
         title: "OUROCOSM Connect",
         theme: ThemeData(
             fontFamily: "FiraCode",
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreenAccent),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigoAccent),
             useMaterial3: true,
             scrollbarTheme: ScrollbarThemeData(
               thumbVisibility: WidgetStateProperty.all<bool>(true),
