@@ -190,7 +190,7 @@ export ENDLESSS_API_URL=${widget.serverConfig.hostIPv4}:${widget.serverConfig.ap
 export ENDLESSS_WEB_URL=${widget.serverConfig.hostIPv4}:${widget.serverConfig.apiPort}
 export ENDLESSS_HTTPS=false
 
-${hostData.path}
+"${hostData.path}"
   ''';
       final file = File(exportFile.path);
       await file.writeAsString(ndlsLaunchBash);
