@@ -44,6 +44,15 @@ type JamRiffData struct {
 	PeakData     []float64 `json:"peakData"`
 }
 
+type EndpointAudio struct {
+	Endpoint string `json:"endpoint"`
+	Hash     string `json:"hash"`
+	Key      string `json:"key"`
+	Length   int    `json:"length"`
+	Mime     string `json:"mime"`
+	URL      string `json:"url"`
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------
 // stem / loop data as per couch
 type JamStemData struct {
@@ -53,14 +62,8 @@ type JamStemData struct {
 	BarLength      int     `json:"barLength"`
 	Bps            float64 `json:"bps"`
 	CdnAttachments struct {
-		OggAudio struct {
-			Endpoint string `json:"endpoint"`
-			Hash     string `json:"hash"`
-			Key      string `json:"key"`
-			Length   int    `json:"length"`
-			Mime     string `json:"mime"`
-			URL      string `json:"url"`
-		} `json:"oggAudio"`
+		OggAudio  EndpointAudio `json:"oggAudio"`
+		FlacAudio EndpointAudio `json:"flacAudio"`
 	} `json:"cdn_attachments"`
 	ColourHistory       []string `json:"colourHistory"`
 	Created             int64    `json:"created"`
@@ -79,4 +82,11 @@ type JamStemData struct {
 	PrimaryColour       string   `json:"primaryColour"`
 	SampleRate          float64  `json:"sampleRate"`
 	Type                string   `json:"type"`
+}
+
+func getActiveEndpoint(stemData JamStemData) *EndpointAudio {
+	if len(stemData.CdnAttachments.FlacAudio.Endpoint) > 0 {
+		return &stemData.CdnAttachments.FlacAudio
+	}
+	return &stemData.CdnAttachments.OggAudio
 }

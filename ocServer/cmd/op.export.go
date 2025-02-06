@@ -243,13 +243,15 @@ var exportCmd = &cobra.Command{
 					SysLog.Fatal("Failed during iteration of riff document set", zap.Error(resultSet.Err()))
 				}
 
+				cdnEndpoint := getActiveEndpoint(resultData)
+
 				yamlFile.WriteString(fmt.Sprintf(` "%s": [`, resultData.ID))
 				yamlFile.WriteString(fmt.Sprintf(`"%s", "%s", "%s", "%s", %d, %d, %d, "%s", "%s", "%s", %f, "%s", %f, "%s", %d, %d, %d, %s, %s, %s, %s ]`,
-					resultData.CdnAttachments.OggAudio.Endpoint,
+					cdnEndpoint.Endpoint,
 					"",
-					resultData.CdnAttachments.OggAudio.Key,
-					resultData.CdnAttachments.OggAudio.Mime,
-					resultData.CdnAttachments.OggAudio.Length,
+					cdnEndpoint.Key,
+					cdnEndpoint.Mime,
+					cdnEndpoint.Length,
 					int32(resultData.SampleRate),
 					resultData.Created/1000, // convert from unixmilli
 					resultData.PresetName,
@@ -278,15 +280,17 @@ var exportCmd = &cobra.Command{
 					stemPath := filepath.Join(cmdOutputDir, "_stems", exportLOREID, resultData.ID[0:1])
 					os.MkdirAll(stemPath, os.ModePerm)
 
+					cdnEndpoint := getActiveEndpoint(resultData)
+
 					// create from/to locations
-					stemDownloadUrl := fmt.Sprintf("https://%s/%s", cmdStemS3Server, resultData.CdnAttachments.OggAudio.Key)
+					stemDownloadUrl := fmt.Sprintf("https://%s/%s", cmdStemS3Server, cdnEndpoint.Key)
 					stemDownloadFile := filepath.Join(stemPath, resultData.ID)
 
 					stemFileExist := false
 
 					// download if we don't already have it
 					if _, err := os.Stat(stemDownloadFile); errors.Is(err, os.ErrNotExist) {
-						err = downloadStem(httpClient, resultData.CdnAttachments.OggAudio.Length, stemDownloadFile, stemDownloadUrl)
+						err = downloadStem(httpClient, cdnEndpoint.Length, stemDownloadFile, stemDownloadUrl)
 						if err != nil {
 							if !cmdIgnoreMissingStems {
 								SysLog.Fatal("Stem download failed", zap.Error(err), zap.String("url", stemDownloadUrl))
