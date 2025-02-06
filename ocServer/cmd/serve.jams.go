@@ -169,6 +169,36 @@ func backgroundJamStateUpdater(chanStopWork <-chan struct{}) {
 // return the current public jams
 func HandlerJamCurated(httpResponse http.ResponseWriter, r *http.Request) {
 
+	authUsername, _, err := decodeAccountAuthBearer(r)
+	if err != nil {
+		http.Error(httpResponse, err.Error(), http.StatusForbidden)
+		return
+	}
+	_, isUserShadowbanned := ShadowbannedUserMap[authUsername]
+	if isUserShadowbanned {
+		SysLog.Info("ShadowBanned " + authUsername)
+
+		var convertedMemberships []JamCuratedData
+		entry := JamCuratedData{}
+		entry.JamLongID = "jm"
+		entry.JamCouchID = "jx"
+		entry.Bio = "none"
+		entry.JamName = "none"
+		entry.ImageURL = ""
+		entry.Members = []string{authUsername}
+		convertedMemberships = append(convertedMemberships, entry)
+
+		nullPublics := &JamCuratedResponse{
+			Okay: true,
+			Data: convertedMemberships,
+		}
+		httpResponse.Header().Set(HeaderNameContentType, ContentTypeApplicationJson)
+		httpResponse.WriteHeader(http.StatusOK)
+		json.NewEncoder(httpResponse).Encode(nullPublics)
+
+		return
+	}
+
 	// grab a lock on the public jam data, ensuring we don't serialise a copy that is in the
 	// process of being updated by backgroundJamStateUpdater() goroutine
 	if err := jamStateSema.Acquire(context.TODO(), 1); err != nil {

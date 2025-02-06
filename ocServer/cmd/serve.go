@@ -34,6 +34,7 @@ const cConfigCosmExternalPort string = "cosm.external-port"
 const cConfigCosmFourCC string = "cosm.fourcc"
 const cConfigCosmAPIPrefix string = "cosm.api-prefix"
 const cConfigCosmAPIAuth string = "cosm.api-auth"
+const cConfigCosmShadowban string = "cosm.shadowban"
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 func HandlerDefault(httpResponse http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,7 @@ func HandlerDefault(httpResponse http.ResponseWriter, r *http.Request) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 var SecuredApiCredentials map[string]string
+var ShadowbannedUserMap map[string]bool
 
 // simple security gateway around chosen API endpoints, uses user/pass as given by config api-auth table
 // intention being that we might have trusted tools working with some of those endpoints, keep them tucked away from scraping/casual abuse
@@ -86,6 +88,14 @@ func runCosmServer() {
 		SysLog.Info("API Access granted", zap.String("Username", k)) // list out API users just to keep an eye on them
 	}
 
+	// load list of users that don't get to see public jams
+	ShadowbannedUserMap = make(map[string]bool)
+	ShadowbannedUsers := viper.GetStringSlice(cConfigCosmShadowban)
+	for _, v := range ShadowbannedUsers {
+		SysLog.Info("Shadowbanned : ", zap.String("Username", v))
+		ShadowbannedUserMap[v] = true
+	}
+
 	// authentication
 	router.HandleFunc("/auth/login", HandlerAuthLogin).Methods("POST")
 	router.HandleFunc("/auth/session", HandlerAuthSession).Methods("GET")
@@ -100,6 +110,9 @@ func runCosmServer() {
 	router.HandleFunc("/accounts/profile", HandlerAccountsProfilePost).Methods("POST")
 	router.HandleFunc("/accounts/{username}/profile", HandlerAccountsProfileSpecific).Methods("GET")
 	router.HandleFunc("/accounts/{username}/following", HandlerAccountsFollowing).Methods("GET")
+
+	// badges
+	router.HandleFunc("/badges/query", HandlerBadgesQueryPost).Methods("POST")
 
 	// jams
 	router.HandleFunc("/jam/curated", HandlerJamCurated).Methods("GET")
