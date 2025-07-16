@@ -1,0 +1,25 @@
+{
+    "public" : 
+    [
+        {
+            "cosmid" : "jam_001",
+            "name" : "Club Dive",
+            "bio" : "May contain techno"
+        },
+        {
+            "cosmid" : "jam_002",
+            "name" : "Super 90",
+            "bio" : "Laidback drive"
+        },
+        {
+            "cosmid" : "jam_003",
+            "name" : "Freestyle Kickback",
+            "bio" : "Anything goes"
+        },
+        {
+            "cosmid" : "jam_004",
+            "name" : "Condensate",
+            "bio" : "Chill forest vibes"
+        }
+    ]
+}
