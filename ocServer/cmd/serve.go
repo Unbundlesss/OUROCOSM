@@ -110,6 +110,10 @@ func runCosmServer() {
 	router.HandleFunc("/accounts/profile", HandlerAccountsProfilePost).Methods("POST")
 	router.HandleFunc("/accounts/{username}/profile", HandlerAccountsProfileSpecific).Methods("GET")
 	router.HandleFunc("/accounts/{username}/following", HandlerAccountsFollowing).Methods("GET")
+	router.HandleFunc("/accounts/settings", HandlerAccountsSettings).Methods("GET")
+
+	// crashes Studio
+	//router.HandleFunc("/subscriptions/my-subscription", HandlerAccountsSubscription).Methods("GET")
 
 	// badges
 	router.HandleFunc("/badges/query", HandlerBadgesQueryPost).Methods("POST")

@@ -4,13 +4,17 @@ go 1.22.3
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
+	github.com/bwmarrin/discordgo v0.28.1
+	github.com/dustin/go-humanize v1.0.1
 	github.com/go-kivik/couchdb v2.0.0+incompatible
 	github.com/go-kivik/kivik/v4 v4.2.3
 	github.com/gorilla/mux v1.8.1
 	github.com/homedepot/flop v0.1.6
 	github.com/hymkor/go-lazy v0.5.0
+	github.com/kdungs/zip v0.0.0-20201102105150-f64161d39db4
 	github.com/mattn/go-colorable v0.1.13
 	github.com/phyber/negroni-gzip v1.0.0
+	github.com/pkg/errors v0.9.1
 	github.com/sollniss/graceful v0.0.0-20230924070016-c29142d29890
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -21,8 +25,6 @@ require (
 )
 
 require (
-	github.com/bwmarrin/discordgo v0.28.1 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.14.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-kivik/couchdb/v3 v3.4.1 // indirect
@@ -36,7 +38,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect

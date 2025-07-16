@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
@@ -48,6 +49,18 @@ type AccountsProfileModify struct {
 type AccountsProfileModifyResponse struct {
 	Okay bool                  `json:"ok"`
 	Data AccountsProfileModify `json:"data"`
+}
+
+type AccountsSettingsInfo struct {
+	LatestTerms string `json:"latest_terms_available_id"`
+}
+type AccountsSettingsResponse struct {
+	Email         string               `json:"email"`
+	AcceptedTerms bool                 `json:"hasAcceptedLatestTerms"`
+	UserId        string               `json:"id"`
+	Info          AccountsSettingsInfo `json:"info"`
+	UserName      string               `json:"name"`
+	TermsVersion  int                  `json:"termsVersionAccepted"`
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -93,6 +106,40 @@ func HandlerAccountsProfileGet(httpResponse http.ResponseWriter, r *http.Request
 	SysLog.Info("Loading account profile", zap.String("User", authUsername))
 	genericProfileResponse(authUsername, httpResponse)
 
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+func HandlerAccountsSettings(httpResponse http.ResponseWriter, r *http.Request) {
+
+	authUsername, _, err := decodeAccountAuthBearer(r)
+	if err != nil {
+		http.Error(httpResponse, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	response := AccountsSettingsResponse{
+		"invalid@email.com",
+		true,
+		authUsername,
+		AccountsSettingsInfo{"93d058cc4d9940d5db35ed8701032ebd"},
+		authUsername,
+		1,
+	}
+
+	httpResponse.Header().Set(HeaderNameContentType, ContentTypeApplicationJson)
+	httpResponse.WriteHeader(http.StatusOK)
+	json.NewEncoder(httpResponse).Encode(response)
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+func HandlerAccountsSubscription(httpResponse http.ResponseWriter, r *http.Request) {
+
+	basicResponse := strings.Builder{}
+	basicResponse.WriteString("{ \"ok\":true, \"data\":{ \"description\": \"Free\", \"subscription\": \"\" } }")
+
+	httpResponse.Header().Set(HeaderNameContentType, ContentTypeApplicationJson)
+	httpResponse.WriteHeader(http.StatusOK)
+	httpResponse.Write([]byte(basicResponse.String()))
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------
